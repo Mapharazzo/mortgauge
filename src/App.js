@@ -1,6 +1,112 @@
 import React, { useState } from 'react';
 import Plot from 'react-plotly.js';
-import axios from 'axios';
+
+function calculateMonthlyDetails({
+    propertyPrice,
+    deposit,
+    annualInterestRate,
+    mortgageTermYears,
+    monthlyRent,
+    annualServiceCharge,
+    investmentReturnRate,
+}, month) {
+    const mortgage = propertyPrice - deposit;
+    const monthlyInterestRate = annualInterestRate / 100 / 12;
+    const numberOfPayments = mortgageTermYears * 12;
+    const monthlyPayment = mortgage * (monthlyInterestRate * Math.pow(1 + monthlyInterestRate, numberOfPayments)) /
+        (Math.pow(1 + monthlyInterestRate, numberOfPayments) - 1);
+
+    // Calculate balance after specific month
+    let balance = mortgage;
+    for (let i = 0; i < month; i++) {
+        const interestPayment = balance * monthlyInterestRate;
+        const principalPayment = monthlyPayment - interestPayment;
+        balance -= principalPayment;
+    }
+
+    const salePrice = propertyPrice;
+    const totalPaid = monthlyPayment * month;
+    const remainingBalance = balance;
+    const estateAgentFeePercentage = 0.024;
+    const estateAgentFee = salePrice * estateAgentFeePercentage;
+    const legalFees = 1500;
+    const ercPercentage = 0.02;
+    const erc = remainingBalance * ercPercentage;
+    const totalSellingCosts = estateAgentFee + legalFees + erc;
+
+    const netProceeds = salePrice - remainingBalance - totalSellingCosts;
+    const totalServiceCharges = annualServiceCharge * (month / 12);
+    const totalOutlay = deposit + totalPaid + totalServiceCharges;
+    const netDifference = netProceeds - totalOutlay;
+    const totalRentSaved = monthlyRent * month;
+    const adjustedNetDifference = netDifference + totalRentSaved;
+
+    // Calculate investment account value
+    const monthlyInvestmentReturnRate = investmentReturnRate / 100 / 12;
+    const investmentAccountValue = deposit * Math.pow(1 + monthlyInvestmentReturnRate, month) +
+        monthlyPayment * ((Math.pow(1 + monthlyInvestmentReturnRate, month) - 1) / monthlyInvestmentReturnRate);
+
+    // Calculate rent vs buy difference
+    let rentVsBuyDifference = null;
+    if (monthlyPayment > monthlyRent) {
+        const extraInvestment = monthlyPayment - monthlyRent;
+        const rentInvestmentValue = deposit * Math.pow(1 + monthlyInvestmentReturnRate, month) +
+            extraInvestment * ((Math.pow(1 + monthlyInvestmentReturnRate, month) - 1) / monthlyInvestmentReturnRate);
+        
+        const totalRentPaid = monthlyRent * month;
+        const buyScenarioValue = propertyPrice - balance - totalPaid - totalServiceCharges;
+        
+        rentVsBuyDifference = (rentInvestmentValue - totalRentPaid) - (buyScenarioValue - deposit);
+    }
+
+    return {
+        propertyPrice,
+        deposit,
+        mortgage,
+        annualInterestRate,
+        monthlyPayment,
+        totalPaid,
+        remainingBalance,
+        salePrice,
+        totalSellingCosts,
+        netProceeds,
+        totalServiceCharges,
+        totalOutlay,
+        netDifference,
+        totalRentSaved,
+        adjustedNetDifference,
+        investmentAccountValue,
+        rentVsBuyDifference
+    };
+}
+
+// Function to get data for all months
+function getAllMonthlyData({
+    propertyPrice,
+    deposit,
+    annualInterestRate,
+    mortgageTermYears,
+    monthlyRent,
+    annualServiceCharge,
+    investmentReturnRate
+}) {
+    const numberOfPayments = mortgageTermYears * 12;
+    const monthlyData = [];
+
+    for (let month = 1; month <= numberOfPayments; month++) {
+        monthlyData.push(calculateMonthlyDetails({
+            propertyPrice,
+            deposit,
+            annualInterestRate,
+            mortgageTermYears,
+            monthlyRent,
+            annualServiceCharge,
+            investmentReturnRate,
+        }, month));
+    }
+
+    return monthlyData;
+}
 
 function App() {
     const [formValues, setFormValues] = useState({
@@ -10,7 +116,8 @@ function App() {
         mortgageTermYears: 25,
         analysisYears: 15,
         monthlyRent: 2500,
-        annualServiceCharge: 5000
+        annualServiceCharge: 5000,
+        investmentReturnRate: 7
     });
 
     const [plotData, setPlotData] = useState(null);
@@ -23,23 +130,23 @@ function App() {
         });
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
         try {
-            // Request detailed data for all months
-            const response = await axios.post('http://localhost:5000/calculate', formValues);
-            const monthlyData = response.data;
+            const monthlyData = getAllMonthlyData(formValues);
 
             // Prepare data for plotting
-            const years = monthlyData.map((_, index) => (index + 1) / 12);  // Convert months to years
-            const remainingBalances = monthlyData.map(data => data.remainingBalance / 1000);  // Convert to thousands
-            const totalPayments = monthlyData.map(data => data.totalPaid / 1000);  // Convert to thousands
-            const netProceeds = monthlyData.map(data => data.netProceeds / 1000);  // Convert to thousands
-            const totalServiceCharges = monthlyData.map(data => data.totalServiceCharges / 1000);  // Convert to thousands
-            const totalOutlay = monthlyData.map(data => data.totalOutlay / 1000);  // Convert to thousands
-            const netDifference = monthlyData.map(data => data.netDifference / 1000);  // Convert to thousands
-            const totalRentSaved = monthlyData.map(data => data.totalRentSaved / 1000);  // Convert to thousands
-            const adjustedNetDifference = monthlyData.map(data => data.adjustedNetDifference / 1000);  // Convert to thousands
+            const years = monthlyData.map((_, index) => (index + 1) / 12);
+            const remainingBalances = monthlyData.map(data => data.remainingBalance / 1000);
+            const totalPayments = monthlyData.map(data => data.totalPaid / 1000);
+            const netProceeds = monthlyData.map(data => data.netProceeds / 1000);
+            const totalServiceCharges = monthlyData.map(data => data.totalServiceCharges / 1000);
+            const totalOutlay = monthlyData.map(data => data.totalOutlay / 1000);
+            const netDifference = monthlyData.map(data => data.netDifference / 1000);
+            const totalRentSaved = monthlyData.map(data => data.totalRentSaved / 1000);
+            const adjustedNetDifference = monthlyData.map(data => data.adjustedNetDifference / 1000);
+            const investmentAccountValues = monthlyData.map(data => data.investmentAccountValue / 1000);
+            const rentVsBuyDifferences = monthlyData.map(data => data.rentVsBuyDifference ? data.rentVsBuyDifference / 1000 : null);
 
             // Get details for the specific analysis year
             const analysisMonthIndex = (formValues.analysisYears - 1) * 12;
@@ -55,9 +162,10 @@ function App() {
                 netDifference,
                 totalRentSaved,
                 adjustedNetDifference,
-                propertyPrice: formValues.propertyPrice / 1000  // Convert to thousands
+                propertyPrice: formValues.propertyPrice / 1000,
+                investmentAccountValues,
+                rentVsBuyDifferences
             });
-
             setYearDetails(yearDetails);
         } catch (error) {
             console.error("There was an error calculating the financials!", error);
@@ -198,8 +306,16 @@ function App() {
                             mode: 'lines',
                             marker: { color: 'cyan' },
                             name: 'Adjusted Net Difference (Thousands)',
+                        },
+                        {
+                            x: plotData.years,
+                            y: plotData.investmentAccountValues,
+                            type: 'scatter',
+                            mode: 'lines',
+                            marker: { color: 'gold' },
+                            name: 'Investment Account (Thousands)',
                             visible: 'legendonly'
-                        }
+                        },
                     ]}
                     layout={{
                         title: 'Mortgage Analysis Over Time',
@@ -231,6 +347,7 @@ function App() {
                     <li><strong>Net Difference:</strong> The difference between the net proceeds from selling the property and the total outlay.</li>
                     <li><strong>Total Rent Saved:</strong> The amount of money saved by not paying rent over the mortgage period.</li>
                     <li><strong>Adjusted Net Difference:</strong> The net difference adjusted by the total rent saved, reflecting the true financial impact.</li>
+                    <li><strong>Investment Account:</strong> The value of an account starting with the deposit amount and growing monthly with the mortgage payment, invested at the specified return rate.</li>
                 </ul>
             </div>
         );
