@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
 
 function calculateMonthlyDetails({
@@ -9,6 +9,7 @@ function calculateMonthlyDetails({
     monthlyRent,
     annualServiceCharge,
     investmentReturnRate,
+    houseAppreciationRate
 }, month) {
     const mortgage = propertyPrice - deposit;
     const monthlyInterestRate = annualInterestRate / 100 / 12;
@@ -24,7 +25,7 @@ function calculateMonthlyDetails({
         balance -= principalPayment;
     }
 
-    const salePrice = propertyPrice;
+    const salePrice = propertyPrice * Math.pow(1 + houseAppreciationRate / 100, month / 12);
     const totalPaid = monthlyPayment * month;
     const remainingBalance = balance;
     const estateAgentFeePercentage = 0.024;
@@ -59,6 +60,8 @@ function calculateMonthlyDetails({
         rentVsBuyDifference = (rentInvestmentValue - totalRentPaid) - (buyScenarioValue - deposit);
     }
 
+    const sellingNetDifference = adjustedNetDifference - totalSellingCosts;
+
     return {
         propertyPrice,
         deposit,
@@ -76,7 +79,8 @@ function calculateMonthlyDetails({
         totalRentSaved,
         adjustedNetDifference,
         investmentAccountValue,
-        rentVsBuyDifference
+        rentVsBuyDifference,
+        sellingNetDifference
     };
 }
 
@@ -88,7 +92,8 @@ function getAllMonthlyData({
     mortgageTermYears,
     monthlyRent,
     annualServiceCharge,
-    investmentReturnRate
+    investmentReturnRate,
+    houseAppreciationRate
 }) {
     const numberOfPayments = mortgageTermYears * 12;
     const monthlyData = [];
@@ -102,6 +107,7 @@ function getAllMonthlyData({
             monthlyRent,
             annualServiceCharge,
             investmentReturnRate,
+            houseAppreciationRate
         }, month));
     }
 
@@ -115,26 +121,36 @@ function App() {
         annualInterestRate: 5.5,
         mortgageTermYears: 25,
         analysisYears: 15,
-        monthlyRent: 2500,
         annualServiceCharge: 5000,
-        investmentReturnRate: 7
+        monthlyRent: 2500,
+        investmentReturnRate: 7,
+        houseAppreciationRate: 0.5
     });
 
     const [plotData, setPlotData] = useState(null);
     const [yearDetails, setYearDetails] = useState(null);
+    const [monthlyPayment, setMonthlyPayment] = useState(null);
+
+    useEffect(() => {
+        handleSubmit(formValues);
+    }, []);
 
     const handleChange = (e) => {
-        setFormValues({
+        const newFormValues = {
             ...formValues,
             [e.target.name]: parseFloat(e.target.value) || 0  // Ensure numeric values
-        });
+        };
+        setFormValues(newFormValues);
+        handleSubmit(newFormValues);
     };
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
+    const handleSubmit = (values = formValues) => {
         try {
-            const monthlyData = getAllMonthlyData(formValues);
-
+            const monthlyData = getAllMonthlyData(values);
+            
+            // Set the monthly payment
+            setMonthlyPayment(monthlyData[0].monthlyPayment);
+    
             // Prepare data for plotting
             const years = monthlyData.map((_, index) => (index + 1) / 12);
             const remainingBalances = monthlyData.map(data => data.remainingBalance / 1000);
@@ -147,11 +163,13 @@ function App() {
             const adjustedNetDifference = monthlyData.map(data => data.adjustedNetDifference / 1000);
             const investmentAccountValues = monthlyData.map(data => data.investmentAccountValue / 1000);
             const rentVsBuyDifferences = monthlyData.map(data => data.rentVsBuyDifference ? data.rentVsBuyDifference / 1000 : null);
-
+            const sellingNetDifferences = monthlyData.map(data => data.sellingNetDifference ? data.sellingNetDifference / 1000 : null);
+            const appreciatedPropertyPrices = monthlyData.map(data => data.salePrice / 1000);
+    
             // Get details for the specific analysis year
-            const analysisMonthIndex = (formValues.analysisYears - 1) * 12;
+            const analysisMonthIndex = (values.analysisYears - 1) * 12;
             const yearDetails = monthlyData[analysisMonthIndex];
-
+    
             setPlotData({
                 years,
                 remainingBalances,
@@ -162,9 +180,11 @@ function App() {
                 netDifference,
                 totalRentSaved,
                 adjustedNetDifference,
-                propertyPrice: formValues.propertyPrice / 1000,
+                propertyPrice: values.propertyPrice / 1000,
                 investmentAccountValues,
-                rentVsBuyDifferences
+                rentVsBuyDifferences,
+                sellingNetDifferences,
+                appreciatedPropertyPrices
             });
             setYearDetails(yearDetails);
         } catch (error) {
@@ -173,27 +193,38 @@ function App() {
     };
 
     const renderForm = () => {
+        const formFields = Object.keys(formValues);
+        const columnSize = Math.ceil(formFields.length / 3);
+    
         return (
-            <form onSubmit={handleSubmit}>
-                {Object.keys(formValues).map((key) => (
-                    <div className="form-group" key={key}>
-                        <label htmlFor={key}>
-                            {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:
-                        </label>
-                        <input
-                            type="number"
-                            id={key}
-                            name={key}
-                            value={formValues[key]}
-                            onChange={handleChange}
-                            className="form-control"
-                            step="0.01"
-                        />
+            <form>
+                <div className="row">
+                    {[0, 1, 2].map(columnIndex => (
+                        <div key={columnIndex} className="col-md-4">
+                            {formFields.slice(columnIndex * columnSize, (columnIndex + 1) * columnSize).map((key) => (
+                                <div className="form-group" key={key}>
+                                    <label htmlFor={key}>
+                                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:
+                                    </label>
+                                    <input
+                                        type="number"
+                                        id={key}
+                                        name={key}
+                                        value={formValues[key]}
+                                        onChange={handleChange}
+                                        className="form-control"
+                                        step="1"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+                {monthlyPayment && (
+                    <div className="h4 mt-3">
+                        Monthly Payment: £{monthlyPayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                     </div>
-                ))}
-                <button type="submit" className="btn btn-success btn-lg btn-block">
-                    Calculate Financials
-                </button>
+                )}
             </form>
         );
     };
@@ -316,6 +347,31 @@ function App() {
                             name: 'Investment Account (Thousands)',
                             visible: 'legendonly'
                         },
+                        {
+                            x: plotData.years,
+                            y: plotData.rentVsBuyDifferences,
+                            type: 'scatter',
+                            mode: 'lines',
+                            marker: { color: 'magenta' },
+                            name: 'Rent vs Buy Difference (Thousands)',
+                        },
+                        {
+                            x: plotData.years,
+                            y: plotData.sellingNetDifferences,
+                            type: 'scatter',
+                            mode: 'lines',
+                            marker: { color: 'lime' },
+                            name: 'Selling Net Difference (Thousands)',
+                            visible: 'legendonly'
+                        },
+                        {
+                            x: plotData.years,
+                            y: plotData.appreciatedPropertyPrices,
+                            type: 'scatter',
+                            mode: 'lines',
+                            marker: { color: 'darkgreen' },
+                            name: 'Appreciated Property Price (Thousands)',
+                        },
                     ]}
                     layout={{
                         title: 'Mortgage Analysis Over Time',
@@ -348,6 +404,9 @@ function App() {
                     <li><strong>Total Rent Saved:</strong> The amount of money saved by not paying rent over the mortgage period.</li>
                     <li><strong>Adjusted Net Difference:</strong> The net difference adjusted by the total rent saved, reflecting the true financial impact.</li>
                     <li><strong>Investment Account:</strong> The value of an account starting with the deposit amount and growing monthly with the mortgage payment, invested at the specified return rate.</li>
+                    <li><strong>Rent vs Buy Difference:</strong> The financial difference between renting and buying. A positive value indicates that renting and investing the difference is more beneficial, while a negative value suggests that buying is more advantageous.</li>
+                    <li><strong>Selling Net Difference:</strong> The adjusted net difference minus the total selling costs, providing a comprehensive view of the financial impact including all costs associated with buying, owning, and selling the property.</li>
+                    <li><strong>Appreciated Property Price:</strong> The property price adjusted for appreciation based on the specified rate.</li>
                 </ul>
             </div>
         );
@@ -355,10 +414,16 @@ function App() {
 
     return (
         <div className="container mt-5">
-            <h1 className="text-center">Property Financial Analysis</h1>
+            <h1 className="text-center">
+                🏡 Mortgauge
+            </h1>
+            <hr/>
             {renderForm()}
-            {renderYearDetails()}
             {renderPlot()}
+            <details>
+                <summary>Year Details</summary>
+                {renderYearDetails()}
+            </details>
         </div>
     );
 }
