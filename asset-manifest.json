@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/mortgauge/static/css/main.79d19d76.css",
-    "main.js": "/mortgauge/static/js/main.590557d6.js",
+    "main.js": "/mortgauge/static/js/main.4f638900.js",
     "static/js/453.8ab44547.chunk.js": "/mortgauge/static/js/453.8ab44547.chunk.js",
     "index.html": "/mortgauge/index.html",
     "main.79d19d76.css.map": "/mortgauge/static/css/main.79d19d76.css.map",
-    "main.590557d6.js.map": "/mortgauge/static/js/main.590557d6.js.map",
+    "main.4f638900.js.map": "/mortgauge/static/js/main.4f638900.js.map",
     "453.8ab44547.chunk.js.map": "/mortgauge/static/js/453.8ab44547.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.79d19d76.css",
-    "static/js/main.590557d6.js"
+    "static/js/main.4f638900.js"
   ]
 }
